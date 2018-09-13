@@ -36,17 +36,21 @@ type Node struct {
 
 // Tree ...
 type Tree struct {
+	depth int
 	masks map[byte]byte
 	root  *Node
 }
 
 // NewTree ...
-func NewTree() *Tree {
-	masksMap := make(map[byte]byte, 0)
-	for i := 0; i <= maxUint; i++ {
+func NewTree(depth int) *Tree {
+	if depth%len(masks) != 0 {
+		panic("depth must be a multiple of 8")
+	}
+	masksMap := make(map[byte]byte, depth)
+	for i := 0; i <= depth; i++ {
 		masksMap[byte(i)] = masks[byte(i)%byte(len(masks))]
 	}
-	return &Tree{masks: masksMap, root: &Node{}}
+	return &Tree{masks: masksMap, root: &Node{}, depth: depth}
 }
 
 func lookUp(b, m byte, parent *Node) *Node {
@@ -63,8 +67,8 @@ func isSet(val, mask byte) bool {
 // Get ...
 func (tr *Tree) Get(key []byte) *NodeValue {
 	node := tr.root
-	for depth := 1; depth <= maxUint; depth++ {
-		pos := depth / 8
+	for depth := 1; depth < tr.depth; depth++ {
+		pos := depth / len(masks)
 		node = lookUp(key[pos], tr.masks[byte(pos)], node)
 		if node == nil {
 			return nil
@@ -75,11 +79,11 @@ func (tr *Tree) Get(key []byte) *NodeValue {
 
 // Insert ...
 func (tr *Tree) Insert(v interface{}) []byte {
-	key := []byte(uid.New(32))
+	key := []byte(uid.New(tr.depth / len(masks)))
 	node := tr.root
 
-	for depth := 1; depth <= maxUint; depth++ {
-		pos := depth / 8
+	for depth := 1; depth < tr.depth; depth++ {
+		pos := depth / len(masks)
 		if isSet(key[pos], tr.masks[byte(pos)]) {
 			if node.Right == nil {
 				node.Right = &Node{}
@@ -98,7 +102,7 @@ func (tr *Tree) Insert(v interface{}) []byte {
 }
 
 func main() {
-	tree := NewTree()
+	tree := NewTree(256)
 
 	key := tree.Insert("Hello world")
 	fmt.Printf("%s\n", key)
