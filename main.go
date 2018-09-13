@@ -37,7 +37,7 @@ type Node struct {
 // Tree ...
 type Tree struct {
 	depth int
-	masks map[byte]byte
+	masks []byte
 	root  *Node
 }
 
@@ -46,7 +46,7 @@ func NewTree(depth int) *Tree {
 	if depth%len(masks) != 0 {
 		panic("depth must be a multiple of 8")
 	}
-	masksMap := make(map[byte]byte, depth)
+	masksMap := make([]byte, depth)
 	for i := 0; i <= depth; i++ {
 		masksMap[byte(i)] = masks[byte(i)%byte(len(masks))]
 	}
@@ -66,9 +66,10 @@ func isSet(val, mask byte) bool {
 
 // Get ...
 func (tr *Tree) Get(key []byte) *NodeValue {
+	pos := 0
 	node := tr.root
-	for depth := 1; depth < tr.depth; depth++ {
-		pos := depth / len(masks)
+	for depth := 0; depth < tr.depth; depth++ {
+		pos = depth / len(masks)
 		node = lookUp(key[pos], tr.masks[byte(pos)], node)
 		if node == nil {
 			return nil
@@ -77,13 +78,36 @@ func (tr *Tree) Get(key []byte) *NodeValue {
 	return node.Value
 }
 
+// RecursiveGet ...
+func (tr *Tree) RecursiveGet(key []byte) *NodeValue {
+	var get func(n *Node) *Node
+	var pos int
+	var depth int
+	get = func(n *Node) *Node {
+		if n == nil {
+			return nil
+		}
+		if depth == tr.depth {
+			return n
+		}
+		pos = depth / 8 //bit
+		depth++
+		if isSet(key[pos], tr.masks[byte(pos)]) {
+			return get(n.Right)
+		}
+		return get(n.Left)
+	}
+	return get(tr.root).Value
+}
+
 // Insert ...
 func (tr *Tree) Insert(v interface{}) []byte {
+	var pos int
 	key := []byte(uid.New(tr.depth / len(masks)))
 	node := tr.root
 
-	for depth := 1; depth < tr.depth; depth++ {
-		pos := depth / len(masks)
+	for depth := 0; depth < tr.depth; depth++ {
+		pos = depth / 8 //bit
 		if isSet(key[pos], tr.masks[byte(pos)]) {
 			if node.Right == nil {
 				node.Right = &Node{}
@@ -101,12 +125,44 @@ func (tr *Tree) Insert(v interface{}) []byte {
 	return key
 }
 
+// RecursiveInsert ...
+func (tr *Tree) RecursiveInsert(v interface{}) []byte {
+	key := []byte(uid.New(tr.depth / len(masks)))
+	pos := 0
+	depth := 0
+	var insert func(n **Node) **Node
+	insert = func(n **Node) **Node {
+		if depth == tr.depth {
+			*n = &Node{
+				Hash:  key,
+				Value: &NodeValue{v},
+			}
+			return nil
+		}
+
+		if *n == nil {
+			*n = &Node{}
+		}
+		pos = depth / 8 //bit
+		depth++
+
+		if isSet(key[pos], tr.masks[byte(pos)]) {
+			return insert(&(*n).Right)
+		}
+		return insert(&(*n).Left)
+	}
+	insert(&tr.root)
+	return key
+}
+
 func main() {
 	tree := NewTree(256)
 
 	key := tree.Insert("Hello world")
 	fmt.Printf("%s\n", key)
 
-	nv := tree.Get(key)
+	nv := tree.RecursiveGet(key)
+	fmt.Println(nv.value)
+	nv = tree.Get(key)
 	fmt.Println(nv.value)
 }
